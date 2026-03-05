@@ -19,5 +19,11 @@ export class Platform extends Phaser.Physics.Arcade.StaticGroup {
     g2.fillRect(0, 0, GAME_CONFIG.PLATFORM_WIDTH, GAME_CONFIG.PLATFORM_HEIGHT);
     g2.generateTexture('__platform_recharging', GAME_CONFIG.PLATFORM_WIDTH, GAME_CONFIG.PLATFORM_HEIGHT);
     g2.destroy();
+
+    const gFull = scene.make.graphics({ x: 0, y: 0 });
+    gFull.fillStyle(GAME_CONFIG.COLOR_PLATFORM);
+    gFull.fillRect(0, 0, GAME_CONFIG.WIDTH, GAME_CONFIG.PLATFORM_HEIGHT);
+    gFull.generateTexture('__platform_full', GAME_CONFIG.WIDTH, GAME_CONFIG.PLATFORM_HEIGHT);
+    gFull.destroy();
   }
 }
