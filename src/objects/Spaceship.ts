@@ -77,17 +77,30 @@ export class Spaceship extends Phaser.Physics.Arcade.Sprite {
       this._fuel = Math.max(0, this._fuel - fuelCost);
 
       if (thrusters.left) {
-        body.setVelocityX(body.velocity.x + GAME_CONFIG.THRUSTER_LEFT_VX * altitudeScale * dt);
-        body.setVelocityY(body.velocity.y + GAME_CONFIG.THRUSTER_LEFT_VY * altitudeScale * dt);
+        this.angle -= GAME_CONFIG.ROTATE_SPEED * dt;
       }
       if (thrusters.right) {
-        body.setVelocityX(body.velocity.x + GAME_CONFIG.THRUSTER_RIGHT_VX * altitudeScale * dt);
-        body.setVelocityY(body.velocity.y + GAME_CONFIG.THRUSTER_RIGHT_VY * altitudeScale * dt);
+        this.angle += GAME_CONFIG.ROTATE_SPEED * dt;
       }
       if (thrusters.retro) {
-        body.setVelocityX(body.velocity.x + GAME_CONFIG.RETRO_VX * altitudeScale * dt);
-        body.setVelocityY(body.velocity.y + GAME_CONFIG.RETRO_VY * altitudeScale * dt);
+        const speed = body.velocity.length();
+        if (speed > 1) {
+          const retroForce = GAME_CONFIG.RETRO_FORCE * altitudeScale * dt;
+          const decelX = -(body.velocity.x / speed) * retroForce;
+          const decelY = -(body.velocity.y / speed) * retroForce;
+          body.setVelocity(
+            body.velocity.x + decelX,
+            body.velocity.y + decelY
+          );
+        }
       }
+
+      const rad = Phaser.Math.DegToRad(this.angle - 90);
+      const thrustForce = GAME_CONFIG.THRUST_FORCE * altitudeScale * dt;
+      body.setVelocity(
+        body.velocity.x + Math.cos(rad) * thrustForce,
+        body.velocity.y + Math.sin(rad) * thrustForce
+      );
     }
 
     if (this._isLanded) {
@@ -102,33 +115,48 @@ export class Spaceship extends Phaser.Physics.Arcade.Sprite {
 
   private drawFlames(thrusters: ThrusterState): void {
     this.flameGraphics.clear();
-    this.flameGraphics.x = this.x;
-    this.flameGraphics.y = this.y;
-
     if (this._fuel <= 0) return;
 
-    if (thrusters.left) {
+    const cx = this.x;
+    const cy = this.y;
+    const angleRad = Phaser.Math.DegToRad(this.angle);
+    const cos = Math.cos(angleRad);
+    const sin = Math.sin(angleRad);
+
+    const rotate = (lx: number, ly: number): [number, number] => [
+      cx + lx * cos - ly * sin,
+      cy + lx * sin + ly * cos,
+    ];
+
+    const anyActive = thrusters.left || thrusters.right || thrusters.retro;
+
+    if (anyActive) {
+      const len = Phaser.Math.Between(10, 20);
+      const [ax, ay] = rotate(-6, 18);
+      const [bx, by] = rotate(6, 18);
+      const [cx2, cy2] = rotate(0, 18 + len);
       this.flameGraphics.fillStyle(GAME_CONFIG.COLOR_THRUSTER_FLAME, 0.9);
-      const len = Phaser.Math.Between(8, 16);
-      this.flameGraphics.fillTriangle(-12, 18, -2, 18, -8, 18 + len);
+      this.flameGraphics.fillTriangle(ax, ay, bx, by, cx2, cy2);
     }
-    if (thrusters.right) {
-      this.flameGraphics.fillStyle(GAME_CONFIG.COLOR_THRUSTER_FLAME, 0.9);
-      const len = Phaser.Math.Between(8, 16);
-      this.flameGraphics.fillTriangle(2, 18, 12, 18, 8, 18 + len);
-    }
+
     if (thrusters.retro) {
-      this.flameGraphics.fillStyle(0x00aaff, 0.85);
       const len = Phaser.Math.Between(6, 12);
-      this.flameGraphics.fillTriangle(8, -2, 20, -2, 14, -2 - len);
-      this.flameGraphics.fillTriangle(-8, -2, -20, -2, -14, -2 - len);
+      this.flameGraphics.fillStyle(0x00aaff, 0.85);
+      const [ax, ay] = rotate(-14, -2);
+      const [bx, by] = rotate(-6, -2);
+      const [cx2, cy2] = rotate(-10, -2 - len);
+      this.flameGraphics.fillTriangle(ax, ay, bx, by, cx2, cy2);
+      const [dx, dy] = rotate(6, -2);
+      const [ex, ey] = rotate(14, -2);
+      const [fx, fy] = rotate(10, -2 - len);
+      this.flameGraphics.fillTriangle(dx, dy, ex, ey, fx, fy);
     }
   }
 
   preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
-    this.flameGraphics.x = this.x;
-    this.flameGraphics.y = this.y;
+    this.flameGraphics.x = 0;
+    this.flameGraphics.y = 0;
   }
 
   destroy(fromScene?: boolean): void {
