@@ -25,31 +25,7 @@ export class MenuScene extends Phaser.Scene {
       fontStyle: 'bold',
     }).setOrigin(0.5);
 
-    this.add.text(WIDTH / 2, HEIGHT / 2 + 36, '[Z] Rotate left  →  thrust right', {
-      fontSize: '12px',
-      color: '#aaaaaa',
-      fontFamily: 'monospace',
-    }).setOrigin(0.5);
-
-    this.add.text(WIDTH / 2, HEIGHT / 2 + 56, '[C] Rotate right  →  thrust left', {
-      fontSize: '12px',
-      color: '#aaaaaa',
-      fontFamily: 'monospace',
-    }).setOrigin(0.5);
-
-    this.add.text(WIDTH / 2, HEIGHT / 2 + 76, '[X] Retro thruster  →  brake', {
-      fontSize: '12px',
-      color: '#aaaaaa',
-      fontFamily: 'monospace',
-    }).setOrigin(0.5);
-
-    this.add.text(WIDTH / 2, HEIGHT / 2 + 96, 'Land on platforms to refuel', {
-      fontSize: '12px',
-      color: '#44ff88',
-      fontFamily: 'monospace',
-    }).setOrigin(0.5);
-
-    const startText = this.add.text(WIDTH / 2, HEIGHT / 2 + 140, '[ PRESS SPACE TO START ]', {
+    const startText = this.add.text(WIDTH / 2, HEIGHT / 2 + 80, '[ PRESS SPACE TO START ]', {
       fontSize: '16px',
       color: '#ffffff',
       fontFamily: 'monospace',
