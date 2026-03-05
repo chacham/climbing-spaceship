@@ -87,7 +87,7 @@ export class GameScene extends Phaser.Scene {
       this.ship.liftOff();
     }
 
-    this.clampShipHorizontal();
+    this.wrapShipHorizontal();
     this.recyclePlatforms();
     this.updateHUD(thrusters, altitude);
 
@@ -177,14 +177,22 @@ private recyclePlatforms(): void {
     }
   }
 
-  private clampShipHorizontal(): void {
+  private wrapShipHorizontal(): void {
     const { WIDTH } = GAME_CONFIG;
-    if (this.ship.x < 20) {
-      this.ship.x = 20;
-      (this.ship.body as Phaser.Physics.Arcade.Body).setVelocityX(0);
-    } else if (this.ship.x > WIDTH - 20) {
-      this.ship.x = WIDTH - 20;
-      (this.ship.body as Phaser.Physics.Arcade.Body).setVelocityX(0);
+    const body = this.ship.body as Phaser.Physics.Arcade.Body;
+    
+    if (this.ship.x < 0) {
+      const vx = body.velocity.x;
+      const vy = body.velocity.y;
+      this.ship.x = WIDTH;
+      body.reset(WIDTH, this.ship.y);
+      body.setVelocity(vx, vy);
+    } else if (this.ship.x > WIDTH) {
+      const vx = body.velocity.x;
+      const vy = body.velocity.y;
+      this.ship.x = 0;
+      body.reset(0, this.ship.y);
+      body.setVelocity(vx, vy);
     }
   }
 
