@@ -10,6 +10,7 @@ export class GameScene extends Phaser.Scene {
   private keyRight!: Phaser.Input.Keyboard.Key;
   private keyUp!: Phaser.Input.Keyboard.Key;
   private keyDown!: Phaser.Input.Keyboard.Key;
+  private keyEsc!: Phaser.Input.Keyboard.Key;
 
   private hudAltitude!: Phaser.GameObjects.Text;
   private hudSpeed!: Phaser.GameObjects.Text;
@@ -60,6 +61,11 @@ export class GameScene extends Phaser.Scene {
     this.keyRight = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
     this.keyUp = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
     this.keyDown = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
+    this.keyEsc = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+
+    this.keyEsc.on('down', () => {
+      this.scene.start('MenuScene');
+    });
 
     this.createHUD();
   }
