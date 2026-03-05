@@ -25,19 +25,19 @@ export class MenuScene extends Phaser.Scene {
       fontStyle: 'bold',
     }).setOrigin(0.5);
 
-    this.add.text(WIDTH / 2, HEIGHT / 2 + 36, '[Z] Left thruster  →  go right+up', {
+    this.add.text(WIDTH / 2, HEIGHT / 2 + 36, '[Z] Rotate left  →  thrust right', {
       fontSize: '12px',
       color: '#aaaaaa',
       fontFamily: 'monospace',
     }).setOrigin(0.5);
 
-    this.add.text(WIDTH / 2, HEIGHT / 2 + 56, '[C] Right thruster  →  go left+up', {
+    this.add.text(WIDTH / 2, HEIGHT / 2 + 56, '[C] Rotate right  →  thrust left', {
       fontSize: '12px',
       color: '#aaaaaa',
       fontFamily: 'monospace',
     }).setOrigin(0.5);
 
-    this.add.text(WIDTH / 2, HEIGHT / 2 + 76, '[X] Retro thruster  →  brake down', {
+    this.add.text(WIDTH / 2, HEIGHT / 2 + 76, '[X] Retro thruster  →  brake', {
       fontSize: '12px',
       color: '#aaaaaa',
       fontFamily: 'monospace',

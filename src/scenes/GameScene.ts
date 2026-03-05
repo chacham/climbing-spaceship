@@ -168,9 +168,9 @@ export class GameScene extends Phaser.Scene {
 
     const indStyle = { fontSize: '11px', fontFamily: 'monospace' };
     this.thrusterIndicators = {
-      z: this.add.text(12, HEIGHT - 44, '[Z] LEFT', indStyle).setScrollFactor(0).setAlpha(0.3),
+      z: this.add.text(12, HEIGHT - 44, '[Z] ROTATE L', indStyle).setScrollFactor(0).setAlpha(0.3),
       x: this.add.text(WIDTH / 2, HEIGHT - 44, '[X] RETRO', indStyle).setOrigin(0.5, 0).setScrollFactor(0).setAlpha(0.3),
-      c: this.add.text(WIDTH - 12, HEIGHT - 44, '[C] RIGHT', indStyle).setOrigin(1, 0).setScrollFactor(0).setAlpha(0.3),
+      c: this.add.text(WIDTH - 12, HEIGHT - 44, '[C] ROTATE R', indStyle).setOrigin(1, 0).setScrollFactor(0).setAlpha(0.3),
     };
   }
 
