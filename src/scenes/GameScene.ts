@@ -3,6 +3,11 @@ import { GAME_CONFIG } from '../config/gameConfig';
 import { Spaceship, ThrusterState } from '../objects/Spaceship';
 import { Platform } from '../objects/Platform';
 import { Obstacle, ObstacleType } from '../objects/Obstacle';
+import { GameMap } from '../utils/MapLoader';
+
+export interface GameSceneData {
+  mapId?: string;
+}
 
 export class GameScene extends Phaser.Scene {
   private ship!: Spaceship;
@@ -22,10 +27,13 @@ export class GameScene extends Phaser.Scene {
   // Dev mode debug info
   private debugInfo!: Phaser.GameObjects.Text;
   private prevFuel: number = GAME_CONFIG.FUEL_MAX;
+  private prevVelocity: { x: number; y: number } = { x: 0, y: 0 };
+  private prevAngularVelocity: number = 0;
 
   private maxAltitude = 0;
   private worldOriginY = 0;
   private isGameOver = false;
+  private currentMap: GameMap | null = null;
 
   private get isDev(): boolean {
     return typeof import.meta !== 'undefined' && (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true;
@@ -35,14 +43,33 @@ export class GameScene extends Phaser.Scene {
     super({ key: 'GameScene' });
   }
 
+  private pendingMapId: string | null = null;
+
+  init(data: GameSceneData): void {
+    this.pendingMapId = data.mapId || null;
+  }
+
   preload(): void {
     Spaceship.preloadTexture(this);
     Platform.preloadTexture(this);
     Obstacle.preloadTextures(this);
+
+    if (this.pendingMapId) {
+      this.load.text(`map_${this.pendingMapId}`, `/maps/${this.pendingMapId}.json`);
+    }
   }
 
   create(): void {
     const { WIDTH, HEIGHT } = GAME_CONFIG;
+
+    if (this.pendingMapId) {
+      try {
+        const mapData = this.cache.text.get(`map_${this.pendingMapId}`);
+        this.currentMap = JSON.parse(mapData);
+      } catch (e) {
+        console.error('Failed to parse map:', e);
+      }
+    }
 
     this.maxAltitude = 0;
     this.isGameOver = false;
@@ -57,11 +84,13 @@ export class GameScene extends Phaser.Scene {
 
     this.createStarfield();
 
-    this.spawnInitialPlatforms();
-
-    this.ship = new Spaceship(this, GAME_CONFIG.SHIP_START_X, GAME_CONFIG.SHIP_START_Y);
-    this.cameras.main.startFollow(this.ship, true, 0.08, 0.08);
-    this.cameras.main.setFollowOffset(0, HEIGHT * 0.25);
+    if (!this.currentMap) {
+      this.spawnInitialPlatforms();
+      this.ship = new Spaceship(this, GAME_CONFIG.SHIP_START_X, GAME_CONFIG.SHIP_START_Y);
+      this.setupShip();
+    } else {
+      this.spawnMapContent();
+    }
 
     this.matter.world.on('collisionstart', (event: Phaser.Physics.Matter.Events.CollisionStartEvent) => {
       event.pairs.forEach((pair) => {
@@ -160,6 +189,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private spawnInitialPlatforms(): void {
+    if (this.currentMap) {
+      this.spawnMapContent();
+      return;
+    }
+
     const { WIDTH, PLATFORM_VERTICAL_SPACING, PLATFORM_COUNT_VISIBLE, PLATFORM_WIDTH } = GAME_CONFIG;
 
     const firstPlatform = Platform.create(this, WIDTH / 2, this.worldOriginY, true);
@@ -176,6 +210,37 @@ export class GameScene extends Phaser.Scene {
         this.spawnObstacleNear(y);
       }
     }
+  }
+
+  private spawnMapContent(): void {
+    if (!this.currentMap || this.ship) return;
+
+    for (const plat of this.currentMap.platforms) {
+      const platform = Platform.create(this, plat.x, plat.y, plat.isFullWidth);
+      if (plat.isPersistent) {
+        platform.setData('persistent', true);
+      }
+      this.platforms.push(platform);
+    }
+
+    for (const obs of this.currentMap.obstacles) {
+      const obstacle = Obstacle.create(this, obs.x, obs.y, obs.type);
+      if (obs.rotation !== undefined) {
+        obstacle.setAngle(obs.rotation);
+      }
+      this.obstacles.push(obstacle);
+    }
+
+    const shipStart = this.currentMap.shipStart;
+    this.ship = new Spaceship(this, shipStart.x, shipStart.y);
+    this.setupShip();
+  }
+
+  private setupShip(): void {
+    if (!this.ship) return;
+    const { HEIGHT } = GAME_CONFIG;
+    this.cameras.main.startFollow(this.ship, true, 0.08, 0.08);
+    this.cameras.main.setFollowOffset(0, HEIGHT * 0.25);
   }
 
   private spawnObstacleNear(platformY: number): void {
@@ -340,8 +405,31 @@ export class GameScene extends Phaser.Scene {
           ? `CHARGE +${fuelRate.toFixed(1)}/s`
           : 'IDLE';
 
-      this.debugInfo.setText(`isLanded: ${isLanded}\nSPD: ${speed}\nSTATE: ${shipState}\nFUEL: ${fuelLabel}`);
+      // Calculate acceleration (change in velocity)
+      const dt = 16.67 / 1000; // approximate delta time in seconds
+      const accelX = (body.velocity.x - this.prevVelocity.x) / dt;
+      const accelY = (body.velocity.y - this.prevVelocity.y) / dt;
+      const acceleration = Math.sqrt(accelX ** 2 + accelY ** 2);
+
+      // Calculate rotation acceleration (change in angular velocity)
+      const angularAccel = (body.angularVelocity - this.prevAngularVelocity) / dt;
+      const rotationVel = (body.angularVelocity * 180 / Math.PI).toFixed(1);
+      const rotationAccel = (angularAccel * 180 / Math.PI).toFixed(1);
+
+      this.debugInfo.setText(
+        `STATE: ${shipState}\n` +
+        `VEL: ${speed} m/s (${body.velocity.x.toFixed(1)}, ${body.velocity.y.toFixed(1)})\n` +
+        `ACCEL: ${acceleration.toFixed(1)} m/s² (${accelX.toFixed(1)}, ${accelY.toFixed(1)})\n` +
+        `FORCE: ${(this.ship.currentForce * 1000).toFixed(2)} mN\n` +
+        `ROT: ${rotationVel} °/s\n` +
+        `ROT_ACCEL: ${rotationAccel} °/s²\n` +
+        `TORQUE: ${(this.ship.currentTorque * 1000).toFixed(2)} mN·m\n` +
+        `FUEL: ${fuel.toFixed(0)} / ${GAME_CONFIG.FUEL_MAX} (${fuelLabel})`
+      );
+
       this.prevFuel = fuel;
+      this.prevVelocity = { x: body.velocity.x, y: body.velocity.y };
+      this.prevAngularVelocity = body.angularVelocity;
     }
   }
 

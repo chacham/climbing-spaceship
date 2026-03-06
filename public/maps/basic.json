@@ -1,0 +1,18 @@
+{
+  "id": "basic",
+  "name": "Basic Training",
+  "description": "Simple platforms for beginners",
+  "difficulty": "easy",
+  "shipStart": { "x": 240, "y": 600 },
+  "platforms": [
+    { "x": 240, "y": 650, "width": 480, "isFullWidth": true, "isPersistent": true },
+    { "x": 120, "y": 350, "width": 120 },
+    { "x": 360, "y": 350, "width": 120 },
+    { "x": 240, "y": 50, "width": 120 }
+  ],
+  "obstacles": [
+    { "x": 120, "y": 200, "type": "rectangle" },
+    { "x": 360, "y": 200, "type": "pentagon" },
+    { "x": 240, "y": -20, "type": "triangle" }
+  ]
+}

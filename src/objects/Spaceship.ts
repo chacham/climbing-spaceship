@@ -20,14 +20,19 @@ export class Spaceship extends Phaser.Physics.Matter.Sprite {
   private _fuel: number = GAME_CONFIG.FUEL_MAX;
   private _isLanded: boolean = false;
   private _altitude: number = 0;
+  private _currentForce: number = 0;
+  private _currentTorque: number = 0;
 
   private thrusterTime: ThrusterTimes = { left: 0, right: 0, up: 0, down: 0 };
   private readonly RAMP_UP_TIME = 1.0;
+  private readonly RAMP_DOWN_TIME = 0.8;
 
   get fuel(): number { return this._fuel; }
   get isLanded(): boolean { return this._isLanded; }
   get altitude(): number { return this._altitude; }
   get matterBody(): MatterJS.BodyType { return this.body as MatterJS.BodyType; }
+  get currentForce(): number { return this._currentForce; }
+  get currentTorque(): number { return this._currentTorque; }
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene.matter.world, x, y, '__spaceship');
@@ -86,13 +91,13 @@ export class Spaceship extends Phaser.Physics.Matter.Sprite {
     const dt = delta / 1000;
     
     if (thrusters.left) this.thrusterTime.left = Math.min(this.RAMP_UP_TIME, this.thrusterTime.left + dt);
-    else this.thrusterTime.left = 0;
+    else this.thrusterTime.left = Math.max(0, this.thrusterTime.left - dt * (this.RAMP_UP_TIME / this.RAMP_DOWN_TIME));
     if (thrusters.right) this.thrusterTime.right = Math.min(this.RAMP_UP_TIME, this.thrusterTime.right + dt);
-    else this.thrusterTime.right = 0;
+    else this.thrusterTime.right = Math.max(0, this.thrusterTime.right - dt * (this.RAMP_UP_TIME / this.RAMP_DOWN_TIME));
     if (thrusters.up) this.thrusterTime.up = Math.min(this.RAMP_UP_TIME, this.thrusterTime.up + dt);
-    else this.thrusterTime.up = 0;
+    else this.thrusterTime.up = Math.max(0, this.thrusterTime.up - dt * (this.RAMP_UP_TIME / this.RAMP_DOWN_TIME));
     if (thrusters.down) this.thrusterTime.down = Math.min(this.RAMP_UP_TIME, this.thrusterTime.down + dt);
-    else this.thrusterTime.down = 0;
+    else this.thrusterTime.down = Math.max(0, this.thrusterTime.down - dt * (this.RAMP_UP_TIME / this.RAMP_DOWN_TIME));
 
     const rampUp = (time: number) => Math.min(1, time / this.RAMP_UP_TIME);
     
@@ -109,44 +114,67 @@ export class Spaceship extends Phaser.Physics.Matter.Sprite {
       const baseThrustMultiplier = 0.008 * altitudeScale;
       const rotationMultiplier = 0.3;
 
+      let totalForce = 0;
+      let totalTorque = 0;
+
       if (thrusters.left) {
         const ramp = rampUp(this.thrusterTime.left);
-        this.setAngularVelocity(this.matterBody.angularVelocity - GAME_CONFIG.ROTATE_ACCELERATION * dt * Math.PI / 180 * rotationMultiplier * ramp);
+        let torque = GAME_CONFIG.ROTATE_ACCELERATION * dt * Math.PI / 180 * rotationMultiplier * ramp;
+        torque = Math.min(torque, GAME_CONFIG.MAX_TORQUE * dt * Math.PI / 180);
+        this.setAngularVelocity(this.matterBody.angularVelocity - torque);
+        totalTorque += torque;
         const rad = Phaser.Math.DegToRad(this.angle - 90);
-        const thrustForce = GAME_CONFIG.THRUST_FORCE * 0.5 * baseThrustMultiplier * ramp;
+        let thrustForce = GAME_CONFIG.THRUST_FORCE * 0.5 * baseThrustMultiplier * ramp;
+        thrustForce = Math.min(thrustForce, GAME_CONFIG.MAX_THRUST_FORCE * ramp);
         this.setVelocity(
           this.body!.velocity.x + Math.cos(rad) * thrustForce,
           this.body!.velocity.y + Math.sin(rad) * thrustForce
         );
+        totalForce += thrustForce;
       }
       if (thrusters.right) {
         const ramp = rampUp(this.thrusterTime.right);
-        this.setAngularVelocity(this.matterBody.angularVelocity + GAME_CONFIG.ROTATE_ACCELERATION * dt * Math.PI / 180 * rotationMultiplier * ramp);
+        let torque = GAME_CONFIG.ROTATE_ACCELERATION * dt * Math.PI / 180 * rotationMultiplier * ramp;
+        torque = Math.min(torque, GAME_CONFIG.MAX_TORQUE * dt * Math.PI / 180);
+        this.setAngularVelocity(this.matterBody.angularVelocity + torque);
+        totalTorque += torque;
         const rad = Phaser.Math.DegToRad(this.angle - 90);
-        const thrustForce = GAME_CONFIG.THRUST_FORCE * 0.5 * baseThrustMultiplier * ramp;
+        let thrustForce = GAME_CONFIG.THRUST_FORCE * 0.5 * baseThrustMultiplier * ramp;
+        thrustForce = Math.min(thrustForce, GAME_CONFIG.MAX_THRUST_FORCE * ramp);
         this.setVelocity(
           this.body!.velocity.x + Math.cos(rad) * thrustForce,
           this.body!.velocity.y + Math.sin(rad) * thrustForce
         );
+        totalForce += thrustForce;
       }
       if (thrusters.up) {
         const ramp = rampUp(this.thrusterTime.up);
         const rad = Phaser.Math.DegToRad(this.angle - 90);
-        const thrustForce = GAME_CONFIG.THRUST_FORCE * baseThrustMultiplier * ramp;
+        let thrustForce = GAME_CONFIG.THRUST_FORCE * baseThrustMultiplier * ramp;
+        thrustForce = Math.min(thrustForce, GAME_CONFIG.MAX_THRUST_FORCE * ramp);
         this.setVelocity(
           this.body!.velocity.x + Math.cos(rad) * thrustForce,
           this.body!.velocity.y + Math.sin(rad) * thrustForce
         );
+        totalForce += thrustForce;
       }
       if (thrusters.down) {
         const ramp = rampUp(this.thrusterTime.down);
         const rad = Phaser.Math.DegToRad(this.angle + 90);
-        const thrustForce = GAME_CONFIG.RETRO_FORCE * 0.5 * baseThrustMultiplier * ramp;
+        let thrustForce = GAME_CONFIG.RETRO_FORCE * 0.5 * baseThrustMultiplier * ramp;
+        thrustForce = Math.min(thrustForce, GAME_CONFIG.MAX_THRUST_FORCE * ramp);
         this.setVelocity(
           this.body!.velocity.x + Math.cos(rad) * thrustForce,
           this.body!.velocity.y + Math.sin(rad) * thrustForce
         );
+        totalForce += thrustForce;
       }
+
+      this._currentForce = totalForce;
+      this._currentTorque = totalTorque * 180 / Math.PI;
+    } else {
+      this._currentForce = 0;
+      this._currentTorque = 0;
     }
 
     if (this._isLanded) {
