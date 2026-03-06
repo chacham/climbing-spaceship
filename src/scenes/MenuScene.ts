@@ -1,47 +1,86 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../config/gameConfig';
+import { MapLoader, GameMap } from '../utils/MapLoader';
 
 export class MenuScene extends Phaser.Scene {
+  private maps: GameMap[] = [];
+  private selectedMapIndex = 0;
+  private mapText!: Phaser.GameObjects.Text;
+  private mapDescriptionText!: Phaser.GameObjects.Text;
+
   constructor() {
     super({ key: 'MenuScene' });
   }
 
-  create(): void {
+  async create(): Promise<void> {
     const { WIDTH, HEIGHT } = GAME_CONFIG;
+
+    this.maps = await MapLoader.loadAll();
 
     this.add.rectangle(0, 0, WIDTH, HEIGHT, GAME_CONFIG.COLOR_BG).setOrigin(0);
     this.createStars();
 
     this.add.triangle(
-      WIDTH / 2, HEIGHT / 2 - 80,
+      WIDTH / 2, HEIGHT / 2 - 120,
       0, -30, -20, 20, 20, 20,
       GAME_CONFIG.COLOR_SHIP
     );
 
-    this.add.text(WIDTH / 2, HEIGHT / 2 - 10, 'CLIMBING SPACESHIP', {
+    this.add.text(WIDTH / 2, HEIGHT / 2 - 50, 'CLIMBING SPACESHIP', {
       fontSize: '22px',
       color: '#00e5ff',
       fontFamily: 'monospace',
       fontStyle: 'bold',
     }).setOrigin(0.5);
 
-    const startText = this.add.text(WIDTH / 2, HEIGHT / 2 + 80, '[ PRESS SPACE TO START ]', {
-      fontSize: '16px',
+    this.mapText = this.add.text(WIDTH / 2, HEIGHT / 2 + 20, this.getMapDisplayName(), {
+      fontSize: '18px',
       color: '#ffffff',
       fontFamily: 'monospace',
     }).setOrigin(0.5);
 
-    this.tweens.add({
-      targets: startText,
-      alpha: 0,
-      duration: 700,
-      yoyo: true,
-      repeat: -1,
+    this.mapDescriptionText = this.add.text(WIDTH / 2, HEIGHT / 2 + 50, this.getMapDescription(), {
+      fontSize: '12px',
+      color: '#888888',
+      fontFamily: 'monospace',
+    }).setOrigin(0.5);
+
+    this.add.text(WIDTH / 2, HEIGHT / 2 + 90, '[←→] SELECT MAP    [SPACE] START', {
+      fontSize: '11px',
+      color: '#666666',
+      fontFamily: 'monospace',
+    }).setOrigin(0.5);
+
+    this.input.keyboard!.on('keydown-LEFT', () => {
+      this.selectedMapIndex = (this.selectedMapIndex - 1 + this.maps.length) % this.maps.length;
+      this.updateMapDisplay();
+    });
+
+    this.input.keyboard!.on('keydown-RIGHT', () => {
+      this.selectedMapIndex = (this.selectedMapIndex + 1) % this.maps.length;
+      this.updateMapDisplay();
     });
 
     this.input.keyboard!.once('keydown-SPACE', () => {
-      this.scene.start('GameScene');
+      const selectedMap = this.maps[this.selectedMapIndex];
+      this.scene.start('GameScene', { mapId: selectedMap.id });
     });
+  }
+
+  private getMapDisplayName(): string {
+    if (this.maps.length === 0) return 'RANDOM';
+    return this.maps[this.selectedMapIndex].name;
+  }
+
+  private getMapDescription(): string {
+    if (this.maps.length === 0) return 'Procedurally generated';
+    const map = this.maps[this.selectedMapIndex];
+    return `[${map.difficulty.toUpperCase()}] ${map.description}`;
+  }
+
+  private updateMapDisplay(): void {
+    this.mapText.setText(this.getMapDisplayName());
+    this.mapDescriptionText.setText(this.getMapDescription());
   }
 
   private createStars(): void {

@@ -1,0 +1,33 @@
+{
+  "id": "asteroid_field",
+  "name": "Asteroid Field",
+  "description": "Dense obstacles with scattered platforms",
+  "difficulty": "hard",
+  "shipStart": { "x": 240, "y": 600 },
+  "platforms": [
+    { "x": 240, "y": 650, "width": 480, "isFullWidth": true, "isPersistent": true },
+    { "x": 80, "y": 520, "width": 80 },
+    { "x": 400, "y": 520, "width": 80 },
+    { "x": 200, "y": 380, "width": 80 },
+    { "x": 320, "y": 300, "width": 80 },
+    { "x": 80, "y": 200, "width": 80 },
+    { "x": 400, "y": 200, "width": 80 },
+    { "x": 240, "y": 100, "width": 80 }
+  ],
+  "obstacles": [
+    { "x": 140, "y": 580, "type": "pentagon" },
+    { "x": 340, "y": 580, "type": "pentagon" },
+    { "x": 240, "y": 520, "type": "triangle" },
+    { "x": 80, "y": 450, "type": "rectangle" },
+    { "x": 400, "y": 450, "type": "rectangle" },
+    { "x": 280, "y": 420, "type": "triangle" },
+    { "x": 140, "y": 340, "type": "pentagon" },
+    { "x": 360, "y": 340, "type": "pentagon" },
+    { "x": 240, "y": 260, "type": "rectangle" },
+    { "x": 160, "y": 200, "type": "triangle" },
+    { "x": 320, "y": 200, "type": "triangle" },
+    { "x": 80, "y": 120, "type": "pentagon" },
+    { "x": 400, "y": 120, "type": "pentagon" },
+    { "x": 240, "y": 40, "type": "rectangle" }
+  ]
+}

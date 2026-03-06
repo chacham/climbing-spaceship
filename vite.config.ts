@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/climbing-spaceship/',
+  base: process.env.NODE_ENV === 'production' ? '/climbing-spaceship/' : '/',
   build: {
     outDir: 'dist',
     assetsDir: 'assets',

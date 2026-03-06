@@ -1,0 +1,25 @@
+{
+  "id": "triangle_gauntlet",
+  "name": "Triangle Gauntlet",
+  "description": "Narrow paths through triangle fields",
+  "difficulty": "medium",
+  "shipStart": { "x": 240, "y": 600 },
+  "platforms": [
+    { "x": 240, "y": 650, "width": 480, "isFullWidth": true, "isPersistent": true },
+    { "x": 100, "y": 500, "width": 100 },
+    { "x": 380, "y": 500, "width": 100 },
+    { "x": 240, "y": 350, "width": 100 },
+    { "x": 100, "y": 200, "width": 100 },
+    { "x": 380, "y": 200, "width": 100 },
+    { "x": 240, "y": 50, "width": 100 }
+  ],
+  "obstacles": [
+    { "x": 170, "y": 500, "type": "triangle" },
+    { "x": 310, "y": 500, "type": "triangle" },
+    { "x": 170, "y": 350, "type": "triangle" },
+    { "x": 310, "y": 350, "type": "triangle" },
+    { "x": 170, "y": 200, "type": "triangle" },
+    { "x": 310, "y": 200, "type": "triangle" },
+    { "x": 240, "y": 120, "type": "triangle" }
+  ]
+}
