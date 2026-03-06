@@ -2,10 +2,12 @@ import Phaser from 'phaser';
 import { GAME_CONFIG } from '../config/gameConfig';
 import { Spaceship, ThrusterState } from '../objects/Spaceship';
 import { Platform } from '../objects/Platform';
+import { Obstacle, ObstacleType } from '../objects/Obstacle';
 
 export class GameScene extends Phaser.Scene {
   private ship!: Spaceship;
-  private platforms!: Phaser.Physics.Arcade.StaticGroup;
+  private platforms: Phaser.Physics.Matter.Image[] = [];
+  private obstacles: Phaser.Physics.Matter.Image[] = [];
   private keyLeft!: Phaser.Input.Keyboard.Key;
   private keyRight!: Phaser.Input.Keyboard.Key;
   private keyUp!: Phaser.Input.Keyboard.Key;
@@ -17,9 +19,17 @@ export class GameScene extends Phaser.Scene {
   private fuelBarFill!: Phaser.GameObjects.Rectangle;
   private controlIndicators!: { left: Phaser.GameObjects.Text; right: Phaser.GameObjects.Text; up: Phaser.GameObjects.Text; down: Phaser.GameObjects.Text };
 
+  // Dev mode debug info
+  private debugInfo!: Phaser.GameObjects.Text;
+  private prevFuel: number = GAME_CONFIG.FUEL_MAX;
+
   private maxAltitude = 0;
   private worldOriginY = 0;
   private isGameOver = false;
+
+  private get isDev(): boolean {
+    return typeof import.meta !== 'undefined' && (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true;
+  }
 
   constructor() {
     super({ key: 'GameScene' });
@@ -28,6 +38,7 @@ export class GameScene extends Phaser.Scene {
   preload(): void {
     Spaceship.preloadTexture(this);
     Platform.preloadTexture(this);
+    Obstacle.preloadTextures(this);
   }
 
   create(): void {
@@ -36,25 +47,53 @@ export class GameScene extends Phaser.Scene {
     this.maxAltitude = 0;
     this.isGameOver = false;
     this.worldOriginY = HEIGHT - 80;
+    this.platforms = [];
+    this.obstacles = [];
 
-    this.physics.world.setBounds(0, -Number.MAX_SAFE_INTEGER / 2, WIDTH, Number.MAX_SAFE_INTEGER);
-    this.physics.world.gravity.y = GAME_CONFIG.GRAVITY;
+    this.matter.world.setBounds(-50, -Number.MAX_SAFE_INTEGER / 2, WIDTH + 100, Number.MAX_SAFE_INTEGER);
 
     this.cameras.main.setBackgroundColor(GAME_CONFIG.COLOR_BG);
     this.cameras.main.setBounds(0, -Number.MAX_SAFE_INTEGER / 2, WIDTH, Number.MAX_SAFE_INTEGER);
 
     this.createStarfield();
 
-    this.platforms = this.physics.add.staticGroup();
     this.spawnInitialPlatforms();
 
     this.ship = new Spaceship(this, GAME_CONFIG.SHIP_START_X, GAME_CONFIG.SHIP_START_Y);
     this.cameras.main.startFollow(this.ship, true, 0.08, 0.08);
     this.cameras.main.setFollowOffset(0, HEIGHT * 0.25);
 
-    this.physics.add.collider(this.ship, this.platforms, (_ship, platform) => {
-      this.ship.land();
-      (platform as Phaser.Physics.Arcade.Image).setData('visited', true);
+    this.matter.world.on('collisionstart', (event: Phaser.Physics.Matter.Events.CollisionStartEvent) => {
+      event.pairs.forEach((pair) => {
+        const bodyA = pair.bodyA;
+        const bodyB = pair.bodyB;
+        
+        const isPlatformA = bodyA.label === 'platform';
+        const isPlatformB = bodyB.label === 'platform';
+        
+        if (isPlatformA || isPlatformB) {
+          console.log('[LAND] Ship collided with platform');
+          this.ship.land();
+          const platformBody = isPlatformA ? bodyA : bodyB;
+          const platformImg = this.platforms.find(p => p.body === platformBody);
+          platformImg?.setData('visited', true);
+        }
+      });
+    });
+
+    this.matter.world.on('collisionend', (event: Phaser.Physics.Matter.Events.CollisionEndEvent) => {
+      event.pairs.forEach((pair) => {
+        const bodyA = pair.bodyA;
+        const bodyB = pair.bodyB;
+        
+        const isPlatformA = bodyA.label === 'platform';
+        const isPlatformB = bodyB.label === 'platform';
+        
+        if (isPlatformA || isPlatformB) {
+          console.log('[LIFTOFF] Ship left platform');
+          this.ship.liftOff();
+        }
+      });
     });
 
     this.keyLeft = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
@@ -87,11 +126,6 @@ export class GameScene extends Phaser.Scene {
     this.ship.applyThrusters(thrusters, altitudeScale, delta);
 
     if (altitude > this.maxAltitude) this.maxAltitude = altitude;
-
-    const body = this.ship.body as Phaser.Physics.Arcade.Body;
-    if (!body.touching.down && !body.blocked.down) {
-      this.ship.liftOff();
-    }
 
     this.wrapShipHorizontal();
     this.recyclePlatforms();
@@ -128,77 +162,122 @@ export class GameScene extends Phaser.Scene {
   private spawnInitialPlatforms(): void {
     const { WIDTH, PLATFORM_VERTICAL_SPACING, PLATFORM_COUNT_VISIBLE, PLATFORM_WIDTH } = GAME_CONFIG;
 
-    const firstPlatform = this.platforms.create(WIDTH / 2, this.worldOriginY, '__platform_full');
+    const firstPlatform = Platform.create(this, WIDTH / 2, this.worldOriginY, true);
     firstPlatform.setData('persistent', true);
+    this.platforms.push(firstPlatform);
 
     for (let i = 1; i <= PLATFORM_COUNT_VISIBLE; i++) {
       const y = this.worldOriginY - i * PLATFORM_VERTICAL_SPACING;
       const x = Phaser.Math.Between(PLATFORM_WIDTH / 2 + 20, WIDTH - PLATFORM_WIDTH / 2 - 20);
-      this.platforms.create(x, y, '__platform');
+      const platform = Platform.create(this, x, y);
+      this.platforms.push(platform);
+      
+      if (Math.random() < GAME_CONFIG.OBSTACLE_SPAWN_CHANCE) {
+        this.spawnObstacleNear(y);
+      }
     }
   }
 
-private recyclePlatforms(): void {
+  private spawnObstacleNear(platformY: number): void {
+    const { WIDTH } = GAME_CONFIG;
+    const types: ObstacleType[] = [...GAME_CONFIG.OBSTACLE_TYPES];
+    const type = types[Math.floor(Math.random() * types.length)];
+    
+    const minDistance = 60;
+    let attempts = 0;
+    let x: number;
+    let y: number;
+    
+    do {
+      x = Phaser.Math.Between(50, WIDTH - 50);
+      y = platformY + Phaser.Math.Between(-150, 150);
+      attempts++;
+    } while (this.isObstacleOverlapping(x, y, minDistance) && attempts < 10);
+    
+    if (attempts >= 10) return;
+    
+    const obstacle = Obstacle.create(this, x, y, type);
+    this.obstacles.push(obstacle);
+  }
+
+  private isObstacleOverlapping(x: number, y: number, minDistance: number): boolean {
+    for (const obstacle of this.obstacles) {
+      const dx = obstacle.x - x;
+      const dy = obstacle.y - y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance < minDistance) return true;
+    }
+    return false;
+  }
+
+  private recyclePlatforms(): void {
     const camTop = this.cameras.main.scrollY;
     const camBottom = camTop + GAME_CONFIG.HEIGHT;
     const { WIDTH, PLATFORM_VERTICAL_SPACING, PLATFORM_WIDTH } = GAME_CONFIG;
 
-    this.platforms.getChildren().forEach((child) => {
-      const img = child as Phaser.Physics.Arcade.Image;
-      
-      if (img.y >= camTop && img.y <= camBottom) {
-        img.setData('visited', true);
+    this.platforms.forEach((platform) => {
+      if (platform.y >= camTop && platform.y <= camBottom) {
+        platform.setData('visited', true);
       }
     });
 
-    const recyclables: Phaser.Physics.Arcade.Image[] = [];
-    this.platforms.getChildren().forEach((child) => {
-      const img = child as Phaser.Physics.Arcade.Image;
-      if (!img.getData('persistent') && !img.getData('visited') && img.y > camBottom + 200) {
-        recyclables.push(img);
+    const recyclables: Phaser.Physics.Matter.Image[] = [];
+    this.platforms.forEach((platform) => {
+      if (!platform.getData('persistent') && !platform.getData('visited') && platform.y > camBottom + 200) {
+        recyclables.push(platform);
       }
     });
 
     let topPlatformY = this.worldOriginY;
-    this.platforms.getChildren().forEach((child) => {
-      const img = child as Phaser.Physics.Arcade.Image;
-      if (img.y < topPlatformY) topPlatformY = img.y;
+    this.platforms.forEach((platform) => {
+      if (platform.y < topPlatformY) topPlatformY = platform.y;
     });
 
     let recycleIndex = 0;
     while (topPlatformY > camTop - GAME_CONFIG.HEIGHT) {
       const newTopY = topPlatformY - Phaser.Math.Between(80, PLATFORM_VERTICAL_SPACING);
       
+      const x = Phaser.Math.Between(PLATFORM_WIDTH / 2 + 20, WIDTH - PLATFORM_WIDTH / 2 - 20);
+      
       if (recycleIndex < recyclables.length) {
         const img = recyclables[recycleIndex];
-        const x = Phaser.Math.Between(PLATFORM_WIDTH / 2 + 20, WIDTH - PLATFORM_WIDTH / 2 - 20);
         img.setPosition(x, newTopY);
-        (img.body as Phaser.Physics.Arcade.StaticBody).reset(x, newTopY);
+        img.setStatic(true);
         recycleIndex++;
       } else {
-        const x = Phaser.Math.Between(PLATFORM_WIDTH / 2 + 20, WIDTH - PLATFORM_WIDTH / 2 - 20);
-        this.platforms.create(x, newTopY, '__platform');
+        const platform = Platform.create(this, x, newTopY);
+        this.platforms.push(platform);
+        
+        if (Math.random() < GAME_CONFIG.OBSTACLE_SPAWN_CHANCE) {
+          this.spawnObstacleNear(newTopY);
+        }
       }
       topPlatformY = newTopY;
     }
+
+    this.obstacles = this.obstacles.filter((obstacle) => {
+      if (obstacle.y > camBottom + 200) {
+        obstacle.destroy();
+        return false;
+      }
+      return true;
+    });
   }
 
   private wrapShipHorizontal(): void {
     const { WIDTH } = GAME_CONFIG;
-    const body = this.ship.body as Phaser.Physics.Arcade.Body;
+    const body = this.ship.matterBody;
     
     if (this.ship.x < 0) {
       const vx = body.velocity.x;
       const vy = body.velocity.y;
-      this.ship.x = WIDTH;
-      body.reset(WIDTH, this.ship.y);
-      body.setVelocity(vx, vy);
+      this.ship.setPosition(WIDTH, this.ship.y);
+      this.ship.setVelocity(vx, vy);
     } else if (this.ship.x > WIDTH) {
       const vx = body.velocity.x;
       const vy = body.velocity.y;
-      this.ship.x = 0;
-      body.reset(0, this.ship.y);
-      body.setVelocity(vx, vy);
+      this.ship.setPosition(0, this.ship.y);
+      this.ship.setVelocity(vx, vy);
     }
   }
 
@@ -221,10 +300,15 @@ private recyclePlatforms(): void {
       down: this.add.text(WIDTH / 2 + 50, HEIGHT - 44, '[↓] REVERSE', indStyle).setOrigin(0.5, 0).setScrollFactor(0).setAlpha(0.3),
       right: this.add.text(WIDTH - 12, HEIGHT - 44, '[→] RIGHT', indStyle).setOrigin(1, 0).setScrollFactor(0).setAlpha(0.3),
     };
+
+    if (this.isDev) {
+      const debugStyle = { fontSize: '11px', color: '#ffaa00', fontFamily: 'monospace' };
+      this.debugInfo = this.add.text(12, 50, 'STATE: --\nFUEL: --', debugStyle).setScrollFactor(0);
+    }
   }
 
   private updateHUD(thrusters: ThrusterState, altitude: number): void {
-    const body = this.ship.body as Phaser.Physics.Arcade.Body;
+    const body = this.ship.matterBody;
     const speed = Math.round(Math.sqrt(body.velocity.x ** 2 + body.velocity.y ** 2));
     const fuel = this.ship.fuel;
     const fuelRatio = fuel / GAME_CONFIG.FUEL_MAX;
@@ -241,6 +325,24 @@ private recyclePlatforms(): void {
     this.controlIndicators.up.setAlpha(thrusters.up ? 1 : 0.3);
     this.controlIndicators.down.setAlpha(thrusters.down ? 1 : 0.3);
     this.controlIndicators.right.setAlpha(thrusters.right ? 1 : 0.3);
+
+    if (this.isDev) {
+      const isLanded = this.ship.isLanded;
+      const shipState = isLanded
+        ? (speed < 0.5 ? 'STOPPED' : 'LANDED')
+        : 'MOVING';
+
+      const fuelDelta = fuel - this.prevFuel;
+      const fuelRate = (fuelDelta * 1000) / 16.67;
+      const fuelLabel = fuelDelta < 0
+        ? `BURN ${Math.abs(fuelRate).toFixed(1)}/s`
+        : fuelDelta > 0
+          ? `CHARGE +${fuelRate.toFixed(1)}/s`
+          : 'IDLE';
+
+      this.debugInfo.setText(`isLanded: ${isLanded}\nSPD: ${speed}\nSTATE: ${shipState}\nFUEL: ${fuelLabel}`);
+      this.prevFuel = fuel;
+    }
   }
 
   private triggerGameOver(): void {

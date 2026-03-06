@@ -13,8 +13,14 @@ const config: Phaser.Types.Core.GameConfig = {
   parent: 'game-container',
   scene: [BootScene, MenuScene, GameScene, GameOverScene],
   physics: {
-    default: 'arcade',
-    arcade: { debug: false },
+    default: 'matter',
+    matter: {
+      debug: false,
+      gravity: { x: 0, y: GAME_CONFIG.GRAVITY / 100 },
+      positionIterations: 20,
+      velocityIterations: 20,
+      constraintIterations: 4,
+    },
   },
   scale: {
     mode: Phaser.Scale.FIT,

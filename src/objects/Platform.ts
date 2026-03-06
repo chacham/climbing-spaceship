@@ -1,9 +1,22 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../config/gameConfig';
 
-export class Platform extends Phaser.Physics.Arcade.StaticGroup {
-  static create(scene: Phaser.Scene, x: number, y: number): Phaser.Physics.Arcade.Image {
-    const img = scene.physics.add.staticImage(x, y, '__platform');
+export class Platform {
+  static create(scene: Phaser.Scene, x: number, y: number, isFullWidth = false): Phaser.Physics.Matter.Image {
+    const textureKey = isFullWidth ? '__platform_full' : '__platform';
+    
+    const img = scene.matter.add.image(x, y, textureKey, undefined, {
+      isStatic: true,
+      label: 'platform',
+      friction: 0.8,
+      restitution: 0.2,
+      slop: 0,
+      collisionFilter: {
+        category: 0x0004,
+        mask: 0x0001,
+      },
+    } as Phaser.Types.Physics.Matter.MatterBodyConfig);
+    
     return img;
   }
 

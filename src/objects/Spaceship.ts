@@ -8,7 +8,7 @@ export interface ThrusterState {
   down: boolean;
 }
 
-export class Spaceship extends Phaser.Physics.Arcade.Sprite {
+export class Spaceship extends Phaser.Physics.Matter.Sprite {
   private flameGraphics!: Phaser.GameObjects.Graphics;
   private _fuel: number = GAME_CONFIG.FUEL_MAX;
   private _isLanded: boolean = false;
@@ -17,19 +17,31 @@ export class Spaceship extends Phaser.Physics.Arcade.Sprite {
   get fuel(): number { return this._fuel; }
   get isLanded(): boolean { return this._isLanded; }
   get altitude(): number { return this._altitude; }
+  get matterBody(): MatterJS.BodyType { return this.body as MatterJS.BodyType; }
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, '__spaceship');
+    super(scene.matter.world, x, y, '__spaceship');
 
-    scene.physics.add.existing(this);
+    this.setBody({
+      type: 'fromVertices',
+      verts: [
+        { x: 0, y: -18 },
+        { x: -16, y: 18 },
+        { x: 16, y: 18 },
+      ],
+    }, {
+      label: 'spaceship',
+      restitution: GAME_CONFIG.BOUNCE_COEFFICIENT,
+      friction: 0.1,
+      frictionAir: 0.01,
+      slop: 0.05,
+      collisionFilter: {
+        category: 0x0001,
+        mask: 0x0002 | 0x0004,
+      },
+    });
+
     scene.add.existing(this);
-
-    const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setCollideWorldBounds(false);
-    body.setMaxVelocity(600, 800);
-    body.setGravityY(0);
-    body.setBounce(0, GAME_CONFIG.BOUNCE_COEFFICIENT);
-    body.maxAngular = GAME_CONFIG.ROTATE_MAX_SPEED;
 
     this.flameGraphics = scene.add.graphics();
     this.setDepth(10);
@@ -61,7 +73,6 @@ export class Spaceship extends Phaser.Physics.Arcade.Sprite {
     altitudeScale: number,
     delta: number
   ): void {
-    const body = this.body as Phaser.Physics.Arcade.Body;
     const dt = delta / 1000;
     
     const activeActions =
@@ -74,53 +85,59 @@ export class Spaceship extends Phaser.Physics.Arcade.Sprite {
       const fuelCost = GAME_CONFIG.FUEL_BURN_RATE * activeActions * dt;
       this._fuel = Math.max(0, this._fuel - fuelCost);
 
+      const thrustMultiplier = 0.005 * altitudeScale;
+      const rotationMultiplier = 0.1;
+
       if (thrusters.left) {
-        body.angularVelocity -= GAME_CONFIG.ROTATE_ACCELERATION * dt;
+        this.setAngularVelocity(this.matterBody.angularVelocity - GAME_CONFIG.ROTATE_ACCELERATION * dt * Math.PI / 180 * rotationMultiplier);
         const rad = Phaser.Math.DegToRad(this.angle - 90);
-        const thrustForce = GAME_CONFIG.THRUST_FORCE * 0.5 * altitudeScale * dt;
-        body.setVelocity(
-          body.velocity.x + Math.cos(rad) * thrustForce,
-          body.velocity.y + Math.sin(rad) * thrustForce
+        const thrustForce = GAME_CONFIG.THRUST_FORCE * 0.5 * thrustMultiplier;
+        this.setVelocity(
+          this.body!.velocity.x + Math.cos(rad) * thrustForce,
+          this.body!.velocity.y + Math.sin(rad) * thrustForce
         );
       }
       if (thrusters.right) {
-        body.angularVelocity += GAME_CONFIG.ROTATE_ACCELERATION * dt;
+        this.setAngularVelocity(this.matterBody.angularVelocity + GAME_CONFIG.ROTATE_ACCELERATION * dt * Math.PI / 180 * rotationMultiplier);
         const rad = Phaser.Math.DegToRad(this.angle - 90);
-        const thrustForce = GAME_CONFIG.THRUST_FORCE * 0.5 * altitudeScale * dt;
-        body.setVelocity(
-          body.velocity.x + Math.cos(rad) * thrustForce,
-          body.velocity.y + Math.sin(rad) * thrustForce
+        const thrustForce = GAME_CONFIG.THRUST_FORCE * 0.5 * thrustMultiplier;
+        this.setVelocity(
+          this.body!.velocity.x + Math.cos(rad) * thrustForce,
+          this.body!.velocity.y + Math.sin(rad) * thrustForce
         );
       }
       if (thrusters.up) {
         const rad = Phaser.Math.DegToRad(this.angle - 90);
-        const thrustForce = GAME_CONFIG.THRUST_FORCE * altitudeScale * dt;
-        body.setVelocity(
-          body.velocity.x + Math.cos(rad) * thrustForce,
-          body.velocity.y + Math.sin(rad) * thrustForce
+        const thrustForce = GAME_CONFIG.THRUST_FORCE * thrustMultiplier;
+        this.setVelocity(
+          this.body!.velocity.x + Math.cos(rad) * thrustForce,
+          this.body!.velocity.y + Math.sin(rad) * thrustForce
         );
       }
       if (thrusters.down) {
         const rad = Phaser.Math.DegToRad(this.angle + 90);
-        const thrustForce = GAME_CONFIG.THRUST_FORCE * 0.5 * altitudeScale * dt;
-        body.setVelocity(
-          body.velocity.x + Math.cos(rad) * thrustForce,
-          body.velocity.y + Math.sin(rad) * thrustForce
+        const thrustForce = GAME_CONFIG.RETRO_FORCE * 0.5 * thrustMultiplier;
+        this.setVelocity(
+          this.body!.velocity.x + Math.cos(rad) * thrustForce,
+          this.body!.velocity.y + Math.sin(rad) * thrustForce
         );
       }
     }
 
     if (this._isLanded) {
       const frictionFactor = Math.pow(1 - GAME_CONFIG.LAND_FRICTION, dt * 60);
-      body.setVelocity(body.velocity.x * frictionFactor, body.velocity.y);
-      body.angularVelocity *= frictionFactor;
+      this.setVelocity(
+        this.body!.velocity.x * frictionFactor,
+        this.body!.velocity.y
+      );
+      this.setAngularVelocity(this.matterBody.angularVelocity * frictionFactor);
     }
 
     if (activeActions === 0) {
       let refillRate: number = GAME_CONFIG.FUEL_REFILL_BASE;
       if (this._isLanded) {
-        const speed = body.velocity.length();
-        refillRate = speed < 5 ? GAME_CONFIG.FUEL_REFILL_STOPPED : GAME_CONFIG.FUEL_REFILL_LANDED;
+        const speed = Math.sqrt(this.body!.velocity.x ** 2 + this.body!.velocity.y ** 2);
+        refillRate = speed < 0.5 ? GAME_CONFIG.FUEL_REFILL_STOPPED : GAME_CONFIG.FUEL_REFILL_LANDED;
       }
       this._fuel = Math.min(GAME_CONFIG.FUEL_MAX, this._fuel + refillRate * dt);
     }
@@ -166,12 +183,6 @@ export class Spaceship extends Phaser.Physics.Arcade.Sprite {
       const [fx, fy] = rotate(10, -2 - len);
       this.flameGraphics.fillTriangle(dx, dy, ex, ey, fx, fy);
     }
-  }
-
-  preUpdate(time: number, delta: number): void {
-    super.preUpdate(time, delta);
-    this.flameGraphics.x = 0;
-    this.flameGraphics.y = 0;
   }
 
   destroy(fromScene?: boolean): void {
