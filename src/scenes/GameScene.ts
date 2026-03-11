@@ -28,12 +28,13 @@ export class GameScene extends Phaser.Scene {
   private debugInfo!: Phaser.GameObjects.Text;
   private prevFuel: number = GAME_CONFIG.FUEL_MAX;
   private prevVelocity: { x: number; y: number } = { x: 0, y: 0 };
-  private prevAngularVelocity: number = 0;
+  private prevAngularVelocityDeg: number = 0;
 
   private maxAltitude = 0;
   private worldOriginY = 0;
   private isGameOver = false;
   private currentMap: GameMap | null = null;
+  private platformContactCount = 0;
 
   private get isDev(): boolean {
     return typeof import.meta !== 'undefined' && (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true;
@@ -73,6 +74,7 @@ export class GameScene extends Phaser.Scene {
 
     this.maxAltitude = 0;
     this.isGameOver = false;
+    this.platformContactCount = 0;
     this.worldOriginY = HEIGHT - 80;
     this.platforms = [];
     this.obstacles = [];
@@ -96,14 +98,15 @@ export class GameScene extends Phaser.Scene {
       event.pairs.forEach((pair) => {
         const bodyA = pair.bodyA;
         const bodyB = pair.bodyB;
-        
-        const isPlatformA = bodyA.label === 'platform';
-        const isPlatformB = bodyB.label === 'platform';
-        
-        if (isPlatformA || isPlatformB) {
-          console.log('[LAND] Ship collided with platform');
+
+        const shipPlatformContact =
+          (bodyA.label === 'spaceship' && bodyB.label === 'platform') ||
+          (bodyA.label === 'platform' && bodyB.label === 'spaceship');
+
+        if (shipPlatformContact) {
+          this.platformContactCount += 1;
           this.ship.land();
-          const platformBody = isPlatformA ? bodyA : bodyB;
+          const platformBody = bodyA.label === 'platform' ? bodyA : bodyB;
           const platformImg = this.platforms.find(p => p.body === platformBody);
           platformImg?.setData('visited', true);
         }
@@ -114,13 +117,16 @@ export class GameScene extends Phaser.Scene {
       event.pairs.forEach((pair) => {
         const bodyA = pair.bodyA;
         const bodyB = pair.bodyB;
-        
-        const isPlatformA = bodyA.label === 'platform';
-        const isPlatformB = bodyB.label === 'platform';
-        
-        if (isPlatformA || isPlatformB) {
-          console.log('[LIFTOFF] Ship left platform');
-          this.ship.liftOff();
+
+        const shipPlatformContact =
+          (bodyA.label === 'spaceship' && bodyB.label === 'platform') ||
+          (bodyA.label === 'platform' && bodyB.label === 'spaceship');
+
+        if (shipPlatformContact) {
+          this.platformContactCount = Math.max(0, this.platformContactCount - 1);
+          if (this.platformContactCount === 0) {
+            this.ship.liftOff();
+          }
         }
       });
     });
@@ -412,9 +418,10 @@ export class GameScene extends Phaser.Scene {
       const acceleration = Math.sqrt(accelX ** 2 + accelY ** 2);
 
       // Calculate rotation acceleration (change in angular velocity)
-      const angularAccel = (body.angularVelocity - this.prevAngularVelocity) / dt;
-      const rotationVel = (body.angularVelocity * 180 / Math.PI).toFixed(1);
-      const rotationAccel = (angularAccel * 180 / Math.PI).toFixed(1);
+      const angularVelocityDeg = this.ship.angularVelocityDeg;
+      const angularAccel = (angularVelocityDeg - this.prevAngularVelocityDeg) / dt;
+      const rotationVel = angularVelocityDeg.toFixed(1);
+      const rotationAccel = angularAccel.toFixed(1);
 
       this.debugInfo.setText(
         `STATE: ${shipState}\n` +
@@ -429,7 +436,7 @@ export class GameScene extends Phaser.Scene {
 
       this.prevFuel = fuel;
       this.prevVelocity = { x: body.velocity.x, y: body.velocity.y };
-      this.prevAngularVelocity = body.angularVelocity;
+      this.prevAngularVelocityDeg = angularVelocityDeg;
     }
   }
 
