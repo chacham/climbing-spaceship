@@ -56,7 +56,8 @@ export class GameScene extends Phaser.Scene {
     Obstacle.preloadTextures(this);
 
     if (this.pendingMapId) {
-      this.load.text(`map_${this.pendingMapId}`, `/maps/${this.pendingMapId}.json`);
+      const baseUrl = (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+      this.load.text(`map_${this.pendingMapId}`, `${baseUrl}maps/${this.pendingMapId}.json`);
     }
   }
 

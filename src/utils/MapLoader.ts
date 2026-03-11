@@ -33,7 +33,9 @@ export class MapLoader {
       return this.cache.get(mapId)!;
     }
 
-    const response = await fetch(`/maps/${mapId}.json`);
+    const baseUrl = (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+    const mapUrl = `${baseUrl}maps/${mapId}.json`;
+    const response = await fetch(mapUrl);
     if (!response.ok) {
       throw new Error(`Failed to load map: ${mapId}`);
     }
